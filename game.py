@@ -1,349 +1,386 @@
 import streamlit as st
-import time
+from pathlib import Path
 
-# Настройка страницы
-st.set_page_config(page_title="Фавориты Екатерины II", page_icon="👑", layout="centered")
+st.set_page_config(page_title="💕 Двор Екатерины II", page_icon="👑", layout="wide")
 
-# Инициализация состояния игры
+# Пути к файлам
+ASSETS_DIR = Path("assets")
+CATHERINE_IMG = ASSETS_DIR / "catherine.jpg"
+ORLOV_IMG = ASSETS_DIR / "orlov.jpg"
+POTEMKIN_IMG = ASSETS_DIR / "potemkin.jpg"
+ZUBOV_IMG = ASSETS_DIR / "zubov.jpg"
+PALACE_IMG = ASSETS_DIR / "palace.jpg"
+MUSIC_FILE = ASSETS_DIR / "music.mp3"
+
+# Инициализация
 if 'game_state' not in st.session_state:
     st.session_state.game_state = 'start'
-    st.session_state.score = 0
-    st.session_state.current_question = 0
-    st.session_state.choices = []
+    st.session_state.stats = {'orlov': 0, 'potemkin': 0, 'zubov': 0, 'influence': 10}
 
 
-# Сброс игры
-def reset_game():
+def reset():
     st.session_state.game_state = 'start'
-    st.session_state.score = 0
-    st.session_state.current_question = 0
-    st.session_state.choices = []
+    st.session_state.stats = {'orlov': 0, 'potemkin': 0, 'zubov': 0, 'influence': 10}
 
 
-# Сценарии игры
-scenarios = [
-    {
-        'year': '1762 год',
-        'situation': 'КРИЗИС ВЛАСТИ',
-        'text': '''
-        Императрица Елизавета Петровна мертва. На троне Пётр III, 
-        но он непопулярен: ввёл прусскую форму, оскорбил гвардию, 
-        предал союзников.
-
-        Екатерина решает действовать! Но кто поможет ей захватить власть?
-        ''',
-        'options': [
-            {
-                'text': 'Григорий Орлов',
-                'correct': True,
-                'result': '''
-                ✅ ОТЛИЧНЫЙ ВЫБОР!
-
-                Григорий Орлов — герой войны, любимец гвардии! 
-                Вместе с братьями он привёл Измайловский и Преображенский 
-                полки на сторону Екатерины.
-
-                28 июня 1762 года Екатерина провозглашена императрицей!
-                ''',
-                'effect': '+10 к легитимности власти'
-            },
-            {
-                'text': 'Платон Зубов',
-                'correct': False,
-                'result': '''
-                ❌ ОШИБКА!
-
-                Платону Зубову сейчас всего 15 лет! Он ещё ребёнок 
-                и не имеет никакого влияния при дворе.
-
-                Без поддержки армии перевреч обречён на провал...
-                ''',
-                'effect': '-50 к легитимности. Вас арестовали!'
-            },
-            {
-                'text': 'Григорий Потёмкин',
-                'correct': False,
-                'result': '''
-                ⚠️ НЕ СОВСЕМ...
-
-                Потёмкин сейчас всего лишь вахмистр. Он храбр 
-                (именно он отдал Екатерине свой темляк при перевороте), 
-                но у него ещё нет влияния.
-
-                Орловы — вот настоящая сила!
-                ''',
-                'effect': '-10 к влиянию. Переворот удался, но с трудом.'
-            }
-        ]
-    },
-    {
-        'year': '1774 год',
-        'situation': 'ОСВОЕНИЕ ЮГА',
-        'text': '''
-        Россия победила Турцию! Получены земли Причерноморья — 
-        дикая степь, которую нужно освоить.
-
-        Нужен человек, который:
-        • Построит города и порты
-        • Создаст флот с нуля
-        • Присоединит Крым
-
-        Кого назначите?
-        ''',
-        'options': [
-            {
-                'text': 'Григорий Потёмкин',
-                'correct': True,
-                'result': '''
-                ✅ ГЕНИАЛЬНОЕ РЕШЕНИЕ!
-
-                Потёмкин-Таврический — человек барочного масштаба!
-
-                ✨ Основал: Херсон, Николаев, Севастополь, Екатеринослав
-                ✨ Создал Черноморский флот
-                ✨ Присоединил Крым без единого выстрела!
-
-                Новороссия расцветает!
-                ''',
-                'effect': '+20 к могуществу империи'
-            },
-            {
-                'text': 'Александр Ланской',
-                'correct': False,
-                'result': '''
-                ❌ СЕРЬЁЗНАЯ ОШИБКА!
-
-                Ланской — милый человек, ценитель искусств, 
-                но он не военный и не строитель!
-
-                Он поможет Екатерине собрать коллекцию Эрмитажа, 
-                но не построит флот...
-                ''',
-                'effect': '-15 к развитию. Турция возвращает земли.'
-
-            },
-            {
-                'text': 'Григорий Орлов',
-                'correct': False,
-                'result': '''
-                ⚠️ УЖЕ ПОЗДНО...
-
-                Орлов уже не тот. Он в ссоре с Екатериной, 
-                уехал за границу. Его время прошло.
-
-                К тому же, Орлов — человек действия, а не строитель.
-                ''',
-                'effect': '-5 к эффективности. Упущенное время.'
-            }
-        ]
-    },
-    {
-        'year': '1789 год',
-        'situation': 'ПОЗДНИЕ ГОДЫ',
-        'text': '''
-        Екатерине 60 лет. Потёмкин умер. Империя велика, 
-        но казна пустеет...
-
-        Нужен молодой фаворит. Но какой тип человека нужен?
-        ''',
-        'options': [
-            {
-                'text': 'Платон Зубов (22 года, красивый)',
-                'correct': False,
-                'result': '''
-                ❌ РОКОВАЯ ОШИБКА!
-
-                Зубов — последний фаворит Екатерины.
-
-                ✖️ Взяточничество и коррупция расцвели
-                ✖️ Расхищение казны (больше, чем на Орлова за 20 лет!)
-                ✖️ Никаких государственных заслуг
-
-                Это путь к закату империи...
-                ''',
-                'effect': '-30 к казне. Коррупция зашкаливает!'
-            },
-            {
-                'text': 'Александр Безбородко (дипломат)',
-                'correct': True,
-                'result': '''
-                ✅ МУДРЫЙ ВЫБОР!
-
-                Безбородко — не фаворит в романтическом смысле, 
-                но гениальный дипломат!
-
-                ✔️ Завершил разделы Польши
-                ✔️ Укрепил международный статус России
-                ✔️ Честен и эффективен
-
-                Империя сильна не только фаворитами, но и профессионалами!
-                ''',
-                'effect': '+15 к дипломатии. Стабильность!'
-            },
-            {
-                'text': 'Молодой гвардеец (неизвестный)',
-                'correct': False,
-                'result': '''
-                ⚠️ СОМНИТЕЛЬНЫЙ ВЫБОР...
-
-                Вы выбрали красивого, но глупого юношу.
-
-                Он не приносит пользы государству, 
-                но требует подарков и внимания.
-
-                Екатерина стареет, а такие фавориты 
-                лишь ускоряют закат...
-                ''',
-                'effect': '-10 к репутации. Двор недоволен.'
-            }
-        ]
+# Стили
+st.markdown("""
+<style>
+    .main { 
+        background: linear-gradient(135deg, #1a1a2e, #16213e); 
+        color: #e8dfd0; 
+        font-family: 'Georgia', serif;
     }
-]
+    h1, h2, h3 { color: #ffd700; text-align: center; }
+    .stButton>button { 
+        background: linear-gradient(135deg, #8B4513, #CD853F); 
+        color: white; border: 2px solid #ffd700; 
+        border-radius: 15px; width: 100%; margin: 5px 0;
+        font-size: 16px;
+    }
+    .dialogue { 
+        background: rgba(26,26,46,0.9); border: 2px solid #8B4513; 
+        border-radius: 15px; padding: 20px; margin: 20px 0;
+    }
+    .stats { background: rgba(139,69,19,0.3); padding: 10px; border-radius: 10px; margin: 5px 0; }
+</style>
+""", unsafe_allow_html=True)
 
 
-# Финал игры
-def show_ending():
-    st.title("👑 ИТОГИ ПРАВЛЕНИЯ")
-
-    if st.session_state.score >= 2:
-        st.success("🏆 ВЕЛИКОЛЕПНЫЙ РЕЗУЛЬТАТ!")
-        st.write('''
-        Вы доказали, что институт фаворитизма менялся:
-
-        ✨ **1760-е**: Орлов — военный стратег для захвата власти
-        ✨ **1770-80-е**: Потёмкин — строитель империи
-        ✨ **1790-е**: Вы избежали ловушки Зубова!
-
-        **Ваш вывод:** Фаворитизм эволюционировал от инструмента 
-        укрепления власти → к инструменту развития → к коррупции.
-
-        📚 Ваша гипотеза ПОДТВЕРЖДЕНА!
-        ''')
-    elif st.session_state.score == 1:
-        st.warning("⚖️ НЕПЛОХО, НО ЕСТЬ ПРОБЕЛЫ")
-        st.write('''
-        Вы поняли, что разные фавориты нужны в разное время, 
-        но допустили ошибки.
-
-        Запомните:
-        • Орлов — для переворота
-        • Потёмкин — для строительства
-        • Избегайте Зубова!
-
-        📚 Попробуйте ещё раз, чтобы понять эволюцию института.
-        ''')
+# Функция для отображения изображения
+def show_image(img_path, caption=None):
+    if img_path.exists():
+        st.image(str(img_path), caption=caption, use_container_width=True)
     else:
-        st.error("💀 КАТАСТРОФА!")
-        st.write('''
-        Вы не поняли сути фаворитизма!
+        st.warning(f" Файл {img_path.name} не найден!")
 
-        ❌ Выбрали не тех людей не в то время
-        ❌ Не увидели эволюции института
-        ❌ Погубили репутацию Екатерины
 
-        📚 Изучите материал ещё раз и попробуйте снова!
-        ''')
+# Боковая панель (только статы)
+with st.sidebar:
+    st.title("📊 Статы")
+    s = st.session_state.stats
+    st.markdown(f"""
+    <div class='stats'>💖 Орлов: {'❤️' * s['orlov']}{'🤍' * (3 - s['orlov'])}</div>
+    <div class='stats'>💖 Потёмкин: {'❤️' * s['potemkin']}{'' * (3 - s['potemkin'])}</div>
+    <div class='stats'>💖 Зубов: {'❤️' * s['zubov']}{'🤍' * (3 - s['zubov'])}</div>
+    <div class='stats'>⚡ Влияние: {s['influence']}</div>
+    """, unsafe_allow_html=True)
 
-    st.write(f"**Ваш счёт:** {st.session_state.score} / 3")
+# === СЦЕНАРИЙ ===
 
-    if st.button("🔄 Играть снова"):
-        reset_game()
-    st.rerun()
+# Экран 1: Старт
+if st.session_state.game_state == 'start':
+    col1, col2, col3 = st.columns([1, 3, 1])
 
-    # Главная страница
-    if st.session_state.game_state == 'start':
-        st.title("👑 ФАВОРИТЫ ЕКАТЕРИНЫ II")
-    st.subheader("Интерактивная историческая игра")
+    with col2:
+        show_image(CATHERINE_IMG, "Екатерина II Великая")
+        st.title("👑 ДВОР ЕКАТЕРИНЫ II")
+        st.subheader("💕 Романтическая историческая новелла")
 
-    st.write('''
-    ### Ваша роль:
-    Вы — придворный советник Екатерины Великой. 
-    От ваших решений зависит судьба России!
+        # === ПЛЕЕР С МУЗЫКОЙ ===
+        if MUSIC_FILE.exists():
+            st.audio(str(MUSIC_FILE), format="audio/mp3", loop=True)
+            st.caption("🔊 **Важно:** Нажми Play. Музыка будет играть бесконечно (Loop)!")
+        else:
+            st.error("❌ Файл music.mp3 не найден в папке assets/")
+        # ========================
 
-    ### Правила:
-    • Вам предстоит сделать **3 важных выбора**
-    • Каждый выбор влияет на историю
-    • Докажите, что институт фаворитизма **менялся** со временем
+    st.markdown("---")
 
-    ### Цель игры:
-    Показать, как эволюционировала роль фаворитов:
-    - 🔴 1760-е: захват власти
-    - 🔵 1770-80-е: строительство империи  
-    - 🟢 1790-е: избежать коррупции
-    ''')
+    if PALACE_IMG.exists():
+        st.image(str(PALACE_IMG), caption="Зимний дворец, 1762 год", use_container_width=True)
+
+    st.markdown("""
+    ### 📖 Твоя история:
+
+    Ты — молодой дворянин при дворе Екатерины Великой.
+
+    **Твоя цель:**
+    - 💕 Завоевать сердце одного из фаворитов
+    - 👑 Построить карьеру при дворе
+    - 📜 Влиять на историю России
+
+    **Выбирай мудро:** каждый выбор меняет отношения!
+    """)
 
     if st.button("🎮 НАЧАТЬ ИГРУ", type="primary"):
-        st.session_state.game_state = 'playing'
-    st.rerun()
+        st.session_state.game_state = 'scene1'
+        st.rerun()
 
-    # Игровой процесс
-    if st.session_state.game_state == 'playing':
-        if st.session_state.current_question >= len(scenarios):
-            st.session_state.game_state = 'ending'
-            show_ending()
+# Экран 2: Выбор героя
+elif st.session_state.game_state == 'scene1':
+    st.title("📅 1762 год — Прибытие ко двору")
+
+    if PALACE_IMG.exists():
+        st.image(str(PALACE_IMG), use_container_width=True)
+
+    st.markdown("""
+    Ты только что прибыл в Петербург. 
+    В воздухе витает напряжение: Пётр III непопулярен,
+    гвардия недовольна, а Екатерина готовится к действию...
+
+    **К кому ты обратишься первым?**
+    """)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        show_image(ORLOV_IMG, "Григорий Орлов")
+        if st.button("🎖️ Григорий Орлов\n(Герой, гвардеец)"):
+            st.session_state.stats['orlov'] += 1
+            st.session_state.stats['influence'] += 1
+            st.session_state.game_state = 'orlov_path'
+            st.rerun()
+
+    with col2:
+        show_image(POTEMKIN_IMG, "Григорий Потёмкин")
+        if st.button("🏛️ Григорий Потёмкин\n(Стратег, умница)"):
+            st.session_state.stats['potemkin'] += 1
+            st.session_state.stats['influence'] += 1
+            st.session_state.game_state = 'potemkin_path'
+            st.rerun()
+
+    with col3:
+        show_image(ZUBOV_IMG, "Платон Зубов")
+        if st.button("💎 Платон Зубов\n(Красавчик, фаворит)"):
+            st.session_state.stats['zubov'] += 1
+            st.session_state.game_state = 'zubov_path'
+            st.rerun()
+
+# Экран 3: Путь Орлова
+elif st.session_state.game_state == 'orlov_path':
+    st.title("⚔️ Путь с Орловым")
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        show_image(ORLOV_IMG, "Григорий Орлов")
+
+    with col2:
+        st.markdown("""
+        **Григорий Орлов** встречает тебя в казармах:
+
+        > *«Новое лицо? У тебя решительный взгляд. 
+        > Мне нужны люди, на которых можно положиться. 
+        > Готов служить России... и мне?»*
+        """)
+
+    choice = st.radio("Твой ответ:", [
+        "«Клянусь, моя шпага — в твоих руках!»",
+        "«Я служу Императрице, а не людям»",
+        "«Расскажите, что от меня требуется»"
+    ])
+
+    if st.button("➡️ Продолжить"):
+        if "шпага" in choice:
+            st.session_state.stats['orlov'] += 2
+            st.session_state.game_state = 'orlov_romance'
+        elif "Императрице" in choice:
+            st.session_state.stats['influence'] += 1
+            st.session_state.game_state = 'orlov_political'
         else:
-            scenario = scenarios[st.session_state.current_question]
+            st.session_state.stats['orlov'] += 1
+            st.session_state.game_state = 'orlov_smart'
+        st.rerun()
 
-    # Прогресс
-    progress = (st.session_state.current_question) / len(scenarios)
-    st.progress(progress)
+# Экран 4: Романтика Орлова
+elif st.session_state.game_state == 'orlov_romance':
+    st.title("💕 Роман с Орловым")
 
-    # Заголовок сценария
-    st.header(f"📅 {scenario['year']}")
-    st.subheader(f"⚡ {scenario['situation']}")
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        show_image(ORLOV_IMG, "Григорий Орлов")
 
-    # Текст ситуации
-    st.write(scenario['text'])
+    with col2:
+        st.markdown("""
+        Орлов улыбается и приглашает тебя на ночную прогулку:
 
-    # Кнопки выбора
-    st.write("---")
-    st.write("**Ваш выбор:**")
+        > *«Знаешь, мало кто видит Петербург таким... тихим. 
+        > Только луна, Нева и мы. Ты не боишься быть со мной?»*
 
-    for i, option in enumerate(scenario['options']):
-        if st.button(f"👉 {option['text']}", key=f"q{st.session_state.current_question}_opt{i}"):
-            # Сохраняем выбор
-            st.session_state.choices.append(option['text'])
+        **Твоё сердце бьётся чаще...**
+        """)
 
-    # Показываем результат
-    st.write("---")
-    st.write(option['result'])
-    st.info(f"📊 {option['effect']}")
+    if st.button(" «С вами — никогда не боюсь»"):
+        st.session_state.stats['orlov'] += 3
+        st.session_state.game_state = 'ending_orlov'
+        st.rerun()
 
-    # Обновляем счёт
-    if option['correct']:
-        st.session_state.score += 1
+    if st.button("🤝 «Я здесь ради дела»"):
+        st.session_state.stats['influence'] += 2
+        st.session_state.game_state = 'ending_political'
+        st.rerun()
 
-    # Кнопка "Дальше"
-    if st.button("➡️ Продолжить", type="primary"):
-        st.session_state.current_question += 1
-    st.rerun()
+# Экран 5: Политика Орлова
+elif st.session_state.game_state == 'orlov_political':
+    st.title("🏛️ Политический путь")
+    show_image(ORLOV_IMG, "Григорий Орлов")
+    st.markdown("Орлов уважает твою независимость. Ты становишься влиятельным придворным.")
+    if st.button("Завершить"):
+        st.session_state.game_state = 'ending_political'
+        st.rerun()
 
-    # Финал
-    if st.session_state.game_state == 'ending':
-        show_ending()
-    # Боковая панель
-    with st.sidebar:
-        st.title("📖 Справка")
-    st.write('''
-    **Основные фавориты:**
+# Экран 6: Умный выбор Орлова
+elif st.session_state.game_state == 'orlov_smart':
+    st.title(" Мудрый выбор")
+    show_image(ORLOV_IMG, "Григорий Орлов")
+    st.markdown("Ты проявляешь осторожность. Орлов ценит твой ум.")
+    if st.button("Завершить"):
+        st.session_state.game_state = 'ending_orlov'
+        st.rerun()
 
-    🔸 Григорий Орлов (1760-е)
-    • Переворот 1762 года
-    • Поддержка гвардии
+# Экран 7: Путь Потёмкина
+elif st.session_state.game_state == 'potemkin_path':
+    st.title("🏗️ Путь с Потёмкиным")
 
-    🔸 Григорий Потёмкин (1770-1791)
-    • Новороссия
-    • Флот
-    • Крым
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        show_image(POTEMKIN_IMG, "Григорий Потёмкин")
 
-    🔸 Платон Зубов (1789-1796)
-    • Коррупция
-    • Закат эпохи
-    ''')
+    with col2:
+        st.markdown("""
+        **Потёмкин** изучает карты Новороссии:
 
-    st.write("---")
-    st.write(f"**Счёт:** {st.session_state.score}/3")
+        > *«Как освоить дикие степи? 
+        > Военной силой... или хитростью?»*
+        """)
 
-    if st.button("🔄 Начать заново"):
-        reset_game()
-    st.rerun()
+    choice = st.radio("Твой ответ:", [
+        "«Сила без ума груба, ум без силы бессилен»",
+        "«Нужно строить города»",
+        "«Это вопрос к Императрице»"
+    ])
+
+    if st.button("➡️ Продолжить"):
+        st.session_state.stats['potemkin'] += 2
+        st.session_state.stats['influence'] += 1
+        st.session_state.game_state = 'ending_potemkin'
+        st.rerun()
+
+# Экран 8: Путь Зубова
+elif st.session_state.game_state == 'zubov_path':
+    st.title("💃 Путь с Зубовым")
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        show_image(ZUBOV_IMG, "Платон Зубов")
+
+    with col2:
+        st.markdown("""
+        На балу **Платон Зубов** подходит к тебе:
+
+        > *«Вы новенький? Как мило... 
+        > При дворе так скучно без свежих лиц. 
+        > Не составите компанию?»*
+        """)
+
+    choice = st.radio("Твой ответ:", [
+        "«С удовольствием!»",
+        "«Я здесь по делу»",
+        "«Это вызовет слухи»"
+    ])
+
+    if st.button("➡️ Продолжить"):
+        if "удовольствием" in choice:
+            st.session_state.stats['zubov'] += 2
+            st.session_state.game_state = 'ending_zubov'
+        else:
+            st.session_state.stats['influence'] += 1
+            st.session_state.game_state = 'ending_neutral'
+        st.rerun()
+
+# === ФИНАЛЫ ===
+
+elif st.session_state.game_state == 'ending_orlov':
+    st.title("💕 ФИНАЛ: Любовь Орлова")
+    show_image(ORLOV_IMG, "Григорий Орлов")
+    st.markdown("""
+    ## ❤️ Ты выбрал любовь!
+
+    Ты стал доверенным лицом **Григория Орлова**. 
+    Вместе вы участвуете в перевороте 1762 года.
+
+    **Твоя награда:**
+    -  Любовь героя России
+    - 👑 Высокое положение при дворе
+    - ⚡ Влияние на историю
+
+    **Итог:** Романтическая победа! 🎉
+    """)
+    st.balloons()
+    if st.button("🔄 Играть снова"):
+        reset()
+        st.rerun()
+
+elif st.session_state.game_state == 'ending_potemkin':
+    st.title("️ ФИНАЛ: Соратник Потёмкина")
+    show_image(POTEMKIN_IMG, "Григорий Потёмкин")
+    st.markdown("""
+    ## 🏛️ Ты выбрал карьеру!
+
+    Ты стал правой рукой **Потёмкина-Таврического**.
+    Вместе вы осваиваете Новороссию и строите империю.
+
+    **Твоя награда:**
+    - 🏆 Государственные заслуги
+    - 💰 Богатство и слава
+    - 📚 Историческое наследие
+
+    **Итог:** Политическая победа! 🎖️
+    """)
+    st.balloons()
+    if st.button("🔄 Играть снова"):
+        reset()
+        st.rerun()
+
+elif st.session_state.game_state == 'ending_zubov':
+    st.title("💎 ФИНАЛ: Фаворит Зубова")
+    show_image(ZUBOV_IMG, "Платон Зубов")
+    st.markdown("""
+    ## 💸 Ты выбрал роскошь!
+
+    Ты стал близким другом **Платона Зубова**.
+    Жизнь в роскоши, но... коррупция растёт.
+
+    **Твоя награда:**
+    - 💎 Богатство
+    - 💃 Балы и развлечения
+    - ⚠️ Но репутация под вопросом...
+
+    **Итог:** Сомнительный выбор 😐
+    """)
+    if st.button("🔄 Играть снова"):
+        reset()
+        st.rerun()
+
+elif st.session_state.game_state == 'ending_political':
+    st.title("⚖️ ФИНАЛ: Независимый придворный")
+    st.markdown("""
+    ## 👑 Ты выбрал независимость!
+
+    Ты не привязался ни к одному фавориту,
+    но построил собственную карьеру.
+
+    **Твоя награда:**
+    - ⚡ Влияние при дворе
+    - 🧠 Репутация мудреца
+    - 🎯 Свобода выбора
+
+    **Итог:** Стабильная карьера! ✨
+    """)
+    if st.button("🔄 Играть снова"):
+        reset()
+        st.rerun()
+
+elif st.session_state.game_state == 'ending_neutral':
+    st.title("📜 ФИНАЛ: Наблюдатель")
+    st.markdown("""
+    ## 🤔 Ты остался в стороне...
+
+    Ты не рискнул сблизиться с фаворитами.
+    Безопасно, но скучно.
+
+    **Итог:** Попробуй ещё раз! 🔄
+    """)
+    if st.button("🔄 Играть снова"):
+        reset()
+        st.rerun()
